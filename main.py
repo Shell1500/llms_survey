@@ -26,7 +26,7 @@ class Settings:
         self.questions_file = os.getenv("QUESTIONS_FILE", "questions.csv")
 
         self.num_questions = int(os.getenv("NUM_QUESTIONS", "0"))
-        self.question_time_seconds = int(os.getenv("QUESTION_TIME_SECONDS", "15"))
+        self.question_time_seconds = int(os.getenv("QUESTION_TIME_SECONDS", "30"))
         trap_prob = float(os.getenv("TRAP_PROBABILITY", "0.25"))
         self.trap_probability = min(max(trap_prob, 0.0), 1.0)
 
