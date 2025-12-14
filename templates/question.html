@@ -12,15 +12,12 @@
         <p class="text-sm font-medium text-slate-500">
           Question {{ question_number }} of {{ total_questions }}
         </p>
-        <p class="text-lg font-semibold text-slate-900">
-          {{ "Automation Assist Onboarding" if is_intervention else "Standard Condition" }}
-        </p>
       </div>
       <div class="text-center">
         <p class="text-sm font-medium uppercase tracking-wide text-slate-500">
           Time Remaining
         </p>
-        <p id="timer-value" class="font-mono text-4xl font-semibold text-slate-900">
+        <p id="timer-value" data-seconds="{{ timer_seconds }}" class="font-mono text-4xl font-semibold text-slate-900">
           {{ "%02d" | format(timer_seconds) }}s
         </p>
       </div>
@@ -50,17 +47,41 @@
       <!-- AI Assistant shown before options -->
       <section
         id="ai-box"
-        class="relative rounded-3xl bg-slate-900/95 px-6 py-6 text-white shadow-lg"
+        class="relative overflow-hidden rounded-3xl bg-gradient-to-br from-slate-900 via-indigo-900 to-blue-900 px-6 py-6 text-white shadow-xl ring-1 ring-white/10"
       >
+        <!-- playful pop avatar - pops from behind card -->
+        <div class="pointer-events-none absolute -bottom-6 -right-6 h-24 w-24 z-10">
+          <div class="relative">
+            <div class="animate-pop-from-behind absolute inset-0 rounded-full bg-blue-400/30 blur-md"></div>
+            <div class="relative grid h-24 w-24 place-items-center rounded-full bg-white shadow-2xl ring-4 ring-white/50">
+              <!-- Simple friendly bot SVG -->
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="h-12 w-12 text-blue-600">
+                <path fill="currentColor" d="M12 2a1 1 0 011 1v1.05a7.5 7.5 0 015.95 5.95H20a1 1 0 110 2h-1.05A7.5 7.5 0 0113 18.95V20a1 1 0 11-2 0v-1.05A7.5 7.5 0 015.05 12H4a1 1 0 110-2h1.05A7.5 7.5 0 0111 4.05V3a1 1 0 011-1Zm-4 8a1.5 1.5 0 100 3 1.5 1.5 0 000-3Zm8 0a1.5 1.5 0 100 3 1.5 1.5 0 000-3Zm-8.5 6.25a.75.75 0 011.06-.06A4.98 4.98 0 0012 17c1.35 0 2.58-.53 3.44-1.41a.75.75 0 111.06 1.06A6.48 6.48 0 0112 18.5c-1.77 0-3.39-.69-4.5-1.85a.75.75 0 01-.06-1.06Z"/>
+              </svg>
+            </div>
+          </div>
+        </div>
+
         <div class="flex items-center gap-3">
           <div class="rounded-full bg-white/20 p-2">
             <span class="font-semibold tracking-wide text-white">AI</span>
           </div>
           <p class="text-lg font-semibold">Assistant Insight</p>
         </div>
-        <p class="mt-4 text-base leading-relaxed text-slate-100">
-          {{ ai_text }}
-        </p>
+
+        <!-- message bubble -->
+        <div class="mt-4 max-w-3xl">
+          <div class="relative rounded-2xl bg-white/95 p-4 text-slate-900 shadow-lg">
+            <div class="absolute -left-3 top-4 h-0 w-0 border-b-8 border-l-8 border-t-8 border-b-transparent border-t-transparent border-l-white/95"></div>
+            <p class="text-base leading-relaxed" id="ai-text-content">
+              {{ ai_text }}
+            </p>
+            <div class="mt-3 flex items-center gap-2 text-xs text-slate-600">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="h-4 w-4 text-blue-600"><path fill="currentColor" d="M12 2a10 10 0 100 20 10 10 0 000-20Zm1 5v6h5v-2h-3V7h-2Z"/></svg>
+              <span>Quick tip: skim the insight, then choose confidently. You’ve got this!</span>
+            </div>
+          </div>
+        </div>
 
         {% if is_intervention %}
         <div
@@ -82,7 +103,7 @@
             />
           </svg>
           <p class="mt-4 text-sm font-medium">
-            Select a tentative answer to reveal the AI guidance.
+            Make a tentative pick to unlock a friendly hint from your AI buddy.
           </p>
         </div>
         {% endif %}
@@ -131,7 +152,7 @@
 
 <script>
   const experimentGroup = "{{ group }}";
-  const timerSeconds = {{ timer_seconds | tojson }};
+  const timerSeconds = Number(document.getElementById("timer-value").dataset.seconds || 0);
   const formEl = document.getElementById("question-form");
   const submitBtn = document.getElementById("submit-btn");
   const optionButtons = Array.from(document.querySelectorAll(".option-card"));
@@ -213,6 +234,51 @@
   formEl.addEventListener("submit", () => {
     hasSubmitted = true;
     clearInterval(timerInterval);
+  });
+</script>
+<style>
+  /* avatar pops from behind the card */
+  @keyframes pop-from-behind {
+    0% { 
+      transform: translate(20px, 20px) scale(0.3); 
+      opacity: 0; 
+    }
+    60% { 
+      transform: translate(0, 0) scale(1.1); 
+      opacity: 0.9; 
+    }
+    100% { 
+      transform: translate(0, 0) scale(1); 
+      opacity: 1; 
+    }
+  }
+  .animate-pop-from-behind { 
+    animation: pop-from-behind 800ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+    animation-delay: 300ms;
+  }
+  
+  /* Bold the AI's answer in the text */
+  #ai-text-content::first-line {
+    font-weight: 600;
+  }
+</style>
+<script>
+  // Bold the answer portion in AI text (pattern: "AI suggests 'ANSWER' because...")
+  document.addEventListener('DOMContentLoaded', function() {
+    const aiTextEl = document.getElementById('ai-text-content');
+    if (aiTextEl) {
+      let text = aiTextEl.textContent;
+      // Match pattern: AI suggests 'ANSWER' or AI suggests ANSWER
+      const match = text.match(/AI suggests ['']?([^''']+?)['']?\s+because/i);
+      if (match) {
+        const answer = match[1];
+        const boldText = text.replace(
+          new RegExp(`(AI suggests ['']?)${answer.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(['']?)`, 'i'),
+          `$1<strong>${answer}</strong>$2`
+        );
+        aiTextEl.innerHTML = boldText;
+      }
+    }
   });
 </script>
 {% endblock %}
