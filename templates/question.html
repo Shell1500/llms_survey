@@ -27,7 +27,7 @@
       id="question-form"
       method="post"
       action="/question/{{ question_number }}"
-      class="flex flex-col gap-6"
+      class="flex flex-col gap-4"
     >
       <input type="hidden" name="session_id" value="{{ session_id }}" />
       <input type="hidden" name="question_id" value="{{ question.question_id }}" />
@@ -36,15 +36,12 @@
       <input type="hidden" name="start_time" value="{{ start_timestamp }}" />
 
       <article class="rounded-3xl bg-white p-6 shadow-md ring-1 ring-slate-100">
-        <h2 class="text-base font-semibold uppercase tracking-wide text-slate-500">
-          Analytical Prompt
-        </h2>
-        <p class="mt-4 text-2xl font-semibold text-slate-900">
+        <p class="text-2xl font-semibold text-slate-900">
           {{ question.question_text }}
         </p>
       </article>
 
-      <!-- AI Assistant shown before options -->
+      <!-- AI Assistant shown for both groups; intervention shows confidence bar, control shows disclaimer -->
       <section
         id="ai-box"
         class="relative overflow-hidden rounded-3xl bg-gradient-to-br from-slate-900 via-indigo-900 to-blue-900 px-6 py-6 text-white shadow-xl ring-1 ring-white/10"
@@ -53,10 +50,36 @@
         <div class="pointer-events-none absolute -bottom-6 -right-6 h-24 w-24 z-10">
           <div class="relative">
             <div class="animate-pop-from-behind absolute inset-0 rounded-full bg-blue-400/30 blur-md"></div>
-            <div class="relative grid h-24 w-24 place-items-center rounded-full bg-white shadow-2xl ring-4 ring-white/50">
-              <!-- Simple friendly bot SVG -->
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="h-12 w-12 text-blue-600">
-                <path fill="currentColor" d="M12 2a1 1 0 011 1v1.05a7.5 7.5 0 015.95 5.95H20a1 1 0 110 2h-1.05A7.5 7.5 0 0113 18.95V20a1 1 0 11-2 0v-1.05A7.5 7.5 0 015.05 12H4a1 1 0 110-2h1.05A7.5 7.5 0 0111 4.05V3a1 1 0 011-1Zm-4 8a1.5 1.5 0 100 3 1.5 1.5 0 000-3Zm8 0a1.5 1.5 0 100 3 1.5 1.5 0 000-3Zm-8.5 6.25a.75.75 0 011.06-.06A4.98 4.98 0 0012 17c1.35 0 2.58-.53 3.44-1.41a.75.75 0 111.06 1.06A6.48 6.48 0 0112 18.5c-1.77 0-3.39-.69-4.5-1.85a.75.75 0 01-.06-1.06Z"/>
+            <div class="relative grid h-24 w-24 place-items-center rounded-full bg-white shadow-2xl ring-4 ring-blue-100/80">
+              <!-- Friendly robot assistant character -->
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" class="h-16 w-16">
+                <!-- Robot head -->
+                <rect x="25" y="30" width="50" height="45" rx="8" fill="#3B82F6" stroke="#1E40AF" stroke-width="2"/>
+                
+                <!-- Antenna -->
+                <line x1="50" y1="30" x2="50" y2="20" stroke="#1E40AF" stroke-width="2" stroke-linecap="round"/>
+                <circle cx="50" cy="18" r="3" fill="#60A5FA"/>
+                
+                <!-- Eyes - friendly and wide -->
+                <circle cx="38" cy="45" r="5" fill="#FFFFFF"/>
+                <circle cx="62" cy="45" r="5" fill="#FFFFFF"/>
+                <circle cx="38" cy="45" r="3" fill="#1E40AF"/>
+                <circle cx="62" cy="45" r="3" fill="#1E40AF"/>
+                
+                <!-- Happy smile -->
+                <path d="M 35 58 Q 50 68 65 58" stroke="#FFFFFF" stroke-width="3" fill="none" stroke-linecap="round"/>
+                
+                <!-- Rosy cheeks -->
+                <circle cx="30" cy="52" r="3" fill="#FCA5A5" opacity="0.6"/>
+                <circle cx="70" cy="52" r="3" fill="#FCA5A5" opacity="0.6"/>
+                
+                <!-- Body panel details -->
+                <rect x="35" y="65" width="8" height="5" rx="1" fill="#60A5FA" opacity="0.5"/>
+                <rect x="57" y="65" width="8" height="5" rx="1" fill="#60A5FA" opacity="0.5"/>
+                
+                <!-- Arms hint -->
+                <circle cx="23" cy="50" r="4" fill="#3B82F6" stroke="#1E40AF" stroke-width="1.5"/>
+                <circle cx="77" cy="50" r="4" fill="#3B82F6" stroke="#1E40AF" stroke-width="1.5"/>
               </svg>
             </div>
           </div>
@@ -70,43 +93,34 @@
         </div>
 
         <!-- message bubble -->
-        <div class="mt-4 max-w-3xl">
+        <div class="mt-3 max-w-3xl">
           <div class="relative rounded-2xl bg-white/95 p-4 text-slate-900 shadow-lg">
             <div class="absolute -left-3 top-4 h-0 w-0 border-b-8 border-l-8 border-t-8 border-b-transparent border-t-transparent border-l-white/95"></div>
             <p class="text-base leading-relaxed" id="ai-text-content">
-              {{ ai_text }}
+              AI suggests <strong>{{ ai_suggested_option }}</strong>. {{ ai_explanation }}
             </p>
-            <div class="mt-3 flex items-center gap-2 text-xs text-slate-600">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="h-4 w-4 text-blue-600"><path fill="currentColor" d="M12 2a10 10 0 100 20 10 10 0 000-20Zm1 5v6h5v-2h-3V7h-2Z"/></svg>
-              <span>Quick tip: skim the insight, then choose confidently. You’ve got this!</span>
+
+            {% if is_intervention %}
+            <div class="mt-4 flex items-center gap-3">
+              <div class="h-3 flex-1 rounded-full bg-slate-200 shadow-inner overflow-hidden">
+                <div
+                  id="ai-confidence-bar"
+                  class="h-full"
+                  data-confidence="{{ ai_confidence }}"
+                  style="width: 0%;"
+                ></div>
+              </div>
+              <div class="min-w-[120px] text-sm font-semibold text-slate-800 text-right">
+                {{ ai_confidence }}% confidence
+              </div>
             </div>
+            {% else %}
+            <p class="mt-3 text-[10px] font-normal text-slate-500/60">
+              This is AI generated and may contain mistakes.
+            </p>
+            {% endif %}
           </div>
         </div>
-
-        {% if is_intervention %}
-        <div
-          id="ai-overlay"
-          class="absolute inset-0 flex flex-col items-center justify-center rounded-3xl bg-slate-900/90 text-center text-white backdrop-blur-sm"
-        >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            class="h-10 w-10 text-white"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-          >
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="1.5"
-              d="M12 11c.788 0 1.548.316 2.107.879A2.99 2.99 0 0115 14v1m-6-4c.788 0 1.548.316 2.107.879A2.99 2.99 0 0111 14v1m-3 4h8a2 2 0 002-2v-3a8 8 0 10-12 0v3a2 2 0 002 2z"
-            />
-          </svg>
-          <p class="mt-4 text-sm font-medium">
-            Make a tentative pick to unlock a friendly hint from your AI buddy.
-          </p>
-        </div>
-        {% endif %}
       </section>
 
       <section>
@@ -114,7 +128,7 @@
           Choose the best answer
         </p>
         <div
-          class="mt-4 grid gap-4 md:grid-cols-2"
+          class="mt-3 grid gap-3 md:grid-cols-2"
         >
           {% for option in question.options %}
           {% if option %}
@@ -128,15 +142,9 @@
           {% endif %}
           {% endfor %}
         </div>
-        {% if is_intervention %}
-        <p class="mt-3 text-xs font-medium text-slate-500">
-          Select a tentative answer to unlock the AI assistant. You can still change
-          your final choice once the insight is revealed.
-        </p>
-        {% endif %}
       </section>
 
-      <div class="flex justify-end">
+      <div class="flex justify-end mt-4">
         <button
           id="submit-btn"
           type="submit"
@@ -158,8 +166,8 @@
   const optionButtons = Array.from(document.querySelectorAll(".option-card"));
   const initialInput = document.getElementById("initial_choice");
   const finalInput = document.getElementById("final_choice");
-  const aiOverlay = document.getElementById("ai-overlay");
   const timerDisplay = document.getElementById("timer-value");
+  const confidenceBar = document.getElementById("ai-confidence-bar");
 
   let hasSubmitted = false;
 
@@ -173,12 +181,6 @@
     });
   };
 
-  const unlockAssistant = () => {
-    if (aiOverlay) {
-      aiOverlay.classList.add("hidden");
-    }
-  };
-
   const enableSubmit = () => {
     submitBtn.disabled = false;
   };
@@ -186,7 +188,6 @@
   const ensureInitialChoice = (value) => {
     if (experimentGroup === "INTERVENTION" && !initialInput.value) {
       initialInput.value = value;
-      unlockAssistant();
     }
   };
 
@@ -208,6 +209,25 @@
   optionButtons.forEach((btn) => {
     btn.addEventListener("click", () => handleSelection(btn.dataset.optionValue));
   });
+
+  if (confidenceBar) {
+    const pct = Number(confidenceBar.dataset.confidence || 0);
+    const clamped = Math.max(0, Math.min(100, pct));
+    confidenceBar.style.width = `${clamped}%`;
+
+    // Color logic: low = red->orange, mid = orange->amber, high = yellow->green
+    if (clamped < 40) {
+      confidenceBar.style.background = "linear-gradient(to right, #ef4444, #f97316)"; // red to orange
+    } else if (clamped < 75) {
+      confidenceBar.style.background = "linear-gradient(to right, #f97316, #fbbf24)"; // orange to amber
+    } else {
+      confidenceBar.style.background = "linear-gradient(to right, #facc15, #10b981)"; // yellow to green
+    }
+
+    confidenceBar.setAttribute("aria-valuenow", String(clamped));
+    confidenceBar.setAttribute("aria-valuemin", "0");
+    confidenceBar.setAttribute("aria-valuemax", "100");
+  }
 
   let countdown = timerSeconds;
   const timerInterval = setInterval(() => {
@@ -257,30 +277,7 @@
     animation-delay: 300ms;
   }
   
-  /* Bold the AI's answer in the text */
-  #ai-text-content::first-line {
-    font-weight: 600;
-  }
 </style>
-<script>
-  // Bold the answer portion in AI text (pattern: "AI suggests 'ANSWER' because...")
-  document.addEventListener('DOMContentLoaded', function() {
-    const aiTextEl = document.getElementById('ai-text-content');
-    if (aiTextEl) {
-      let text = aiTextEl.textContent;
-      // Match pattern: AI suggests 'ANSWER' or AI suggests ANSWER
-      const match = text.match(/AI suggests ['']?([^''']+?)['']?\s+because/i);
-      if (match) {
-        const answer = match[1];
-        const boldText = text.replace(
-          new RegExp(`(AI suggests ['']?)${answer.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(['']?)`, 'i'),
-          `$1<strong>${answer}</strong>$2`
-        );
-        aiTextEl.innerHTML = boldText;
-      }
-    }
-  });
-</script>
 {% endblock %}
 
 

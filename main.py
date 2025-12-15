@@ -23,13 +23,10 @@ class Settings:
     def __init__(self) -> None:
         self.mongo_uri = os.getenv("MONGO_URI", "mongodb://localhost:27017")
         self.mongo_db = os.getenv("MONGO_DB", "automation_bias")
-        self.questions_file = os.getenv("QUESTIONS_FILE", "questions.csv")
+        self.questions_file = os.getenv("QUESTIONS_FILE", "new_questions.csv")
 
         self.num_questions = int(os.getenv("NUM_QUESTIONS", "0"))
         self.question_time_seconds = int(os.getenv("QUESTION_TIME_SECONDS", "30"))
-        trap_prob = float(os.getenv("TRAP_PROBABILITY", "0.25"))
-        self.trap_probability = min(max(trap_prob, 0.0), 1.0)
-
         if self.question_time_seconds <= 0:
             raise ValueError("QUESTION_TIME_SECONDS must be a positive integer.")
 
@@ -55,8 +52,10 @@ def load_questions(file_path: str) -> List[Dict[str, str]]:
         "option_2",
         "option_3",
         "option_4",
-        "ai_true_response",
-        "ai_false_response",
+        "ai_suggested_option",
+        "ai_explanation",
+        "ai_confidence",
+        "time_question",
     }
     missing_columns = required_columns - set(questions[0].keys())
     if missing_columns:
@@ -72,13 +71,15 @@ class SessionManager:
         self.questions_bank = [dict(q) for q in questions_bank]
         self.settings = settings
         self.sessions: Dict[str, Dict] = {}
+        self._next_group = "CONTROL"
 
     def create_session(self, student_id: str) -> str:
         if not self.questions_bank:
             raise RuntimeError("No questions available.")
 
         session_id = str(uuid4())
-        group = random.choice(["CONTROL", "INTERVENTION"])
+        group = self._next_group
+        self._next_group = "INTERVENTION" if self._next_group == "CONTROL" else "CONTROL"
         questions = [dict(q) for q in self.questions_bank]
         random.shuffle(questions)
 
@@ -86,16 +87,10 @@ class SessionManager:
         if limit > 0:
             questions = questions[: min(limit, len(questions))]
 
-        traps = {
-            q["question_id"]: random.random() < self.settings.trap_probability
-            for q in questions
-        }
-
         self.sessions[session_id] = {
             "student_id": student_id,
             "group": group,
             "questions": questions,
-            "traps": traps,
             "created_at": datetime.utcnow(),
         }
         return session_id
@@ -108,7 +103,7 @@ class SessionManager:
 
     def get_question(
         self, session_id: str, question_number: int
-    ) -> Tuple[Dict[str, str], bool, str]:
+    ) -> Tuple[Dict[str, str], str, str, int, int]:
         session = self.get_session(session_id)
         if not session:
             raise KeyError("Session not found.")
@@ -125,13 +120,23 @@ class SessionManager:
             question.get("option_4", ""),
         ]
 
-        is_trap = session["traps"][question["question_id"]]
-        ai_text = (
-            question.get("ai_false_response", "")
-            if is_trap
-            else question.get("ai_true_response", "")
-        )
-        return question, is_trap, ai_text
+        suggested_option = question.get("ai_suggested_option", "").strip()
+        ai_explanation = question.get("ai_explanation", "").strip()
+        confidence_raw = question.get("ai_confidence", "0")
+        try:
+            ai_confidence = max(0, min(100, int(float(confidence_raw))))
+        except (TypeError, ValueError):
+            ai_confidence = 0
+
+        time_raw = question.get("time_question", None)
+        try:
+            time_seconds = int(time_raw) if time_raw is not None else self.settings.question_time_seconds
+            if time_seconds <= 0:
+                time_seconds = self.settings.question_time_seconds
+        except (TypeError, ValueError):
+            time_seconds = self.settings.question_time_seconds
+
+        return question, suggested_option, ai_explanation, ai_confidence, time_seconds
 
     def question_count(self, session_id: str) -> int:
         session = self.get_session(session_id)
@@ -186,9 +191,13 @@ async def question_page(
 
     total_questions = session_manager.question_count(session_id)
     try:
-        question, is_trap, ai_text = session_manager.get_question(
-            session_id, question_number
-        )
+        (
+            question,
+            ai_suggested_option,
+            ai_explanation,
+            ai_confidence,
+            time_seconds,
+        ) = session_manager.get_question(session_id, question_number)
     except (KeyError, IndexError):
         raise HTTPException(status_code=404, detail="Question not found.")
 
@@ -201,9 +210,10 @@ async def question_page(
         "question_number": question_number,
         "total_questions": total_questions,
         "question": question,
-        "ai_text": ai_text,
-        "is_trap": is_trap,
-        "timer_seconds": settings.question_time_seconds,
+        "ai_suggested_option": ai_suggested_option,
+        "ai_explanation": ai_explanation,
+        "ai_confidence": ai_confidence,
+        "timer_seconds": time_seconds,
         "start_timestamp": start_timestamp,
     }
     return templates.TemplateResponse("question.html", context)
@@ -227,7 +237,7 @@ async def submit_question(
     if question_number < 1 or question_number > total_questions:
         raise HTTPException(status_code=400, detail="Invalid question number.")
 
-    question, is_trap, _ = session_manager.get_question(session_id, question_number)
+    question, _, _, _, _ = session_manager.get_question(session_id, question_number)
     if question["question_id"] != question_id:
         raise HTTPException(status_code=400, detail="Question mismatch.")
 
@@ -253,7 +263,6 @@ async def submit_question(
         "session_id": session_id,
         "group": session["group"],
         "question_id": question_id,
-        "is_trap": is_trap,
         "user_initial_choice": initial_choice,
         "user_final_choice": final_choice,
         "time_taken_ms": elapsed_ms,
