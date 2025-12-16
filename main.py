@@ -237,7 +237,7 @@ async def submit_question(
     if question_number < 1 or question_number > total_questions:
         raise HTTPException(status_code=400, detail="Invalid question number.")
 
-    question, _, _, _, _ = session_manager.get_question(session_id, question_number)
+    question, ai_suggested_option, _, ai_confidence, _ = session_manager.get_question(session_id, question_number)
     if question["question_id"] != question_id:
         raise HTTPException(status_code=400, detail="Question mismatch.")
 
@@ -258,6 +258,10 @@ async def submit_question(
         0,
     )
 
+    # Get ground truth and determine if AI was correct
+    ground_truth = question.get("ground_truth", "").strip()
+    ai_was_correct = (ai_suggested_option.strip() == ground_truth) if ai_suggested_option and ground_truth else None
+
     record = {
         "student_id": session["student_id"],
         "session_id": session_id,
@@ -265,6 +269,10 @@ async def submit_question(
         "question_id": question_id,
         "user_initial_choice": initial_choice,
         "user_final_choice": final_choice,
+        "ai_suggested_option": ai_suggested_option,
+        "ai_confidence_shown": ai_confidence,
+        "ai_was_correct": ai_was_correct,
+        "correct_answer": ground_truth,
         "time_taken_ms": elapsed_ms,
         "timestamp": datetime.utcnow(),
     }
