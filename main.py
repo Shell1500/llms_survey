@@ -96,7 +96,7 @@ class SessionManager:
         random.shuffle(easy_questions)
         random.shuffle(hard_questions)
 
-        desired_pattern = ["easy", "hard", "easy", "hard", "hard"]
+        desired_pattern = ["easy", "easy", "hard", "hard", "hard"]
         ordered: List[Dict[str, str]] = []
 
         for slot in desired_pattern:

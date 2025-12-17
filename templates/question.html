@@ -89,15 +89,16 @@
           <div class="rounded-full bg-white/20 p-2">
             <span class="font-semibold tracking-wide text-white">AI</span>
           </div>
-          <p class="text-lg font-semibold">Assistant Insight</p>
+          <p class="text-xl font-semibold">Assistant Insight</p>
         </div>
 
         <!-- message bubble -->
-        <div class="mt-3 max-w-3xl">
-          <div class="relative rounded-2xl bg-white/95 p-4 text-slate-900 shadow-lg">
-            <div class="absolute -left-3 top-4 h-0 w-0 border-b-8 border-l-8 border-t-8 border-b-transparent border-t-transparent border-l-white/95"></div>
-            <p class="text-base leading-relaxed" id="ai-text-content">
-              AI suggests <strong>{{ ai_suggested_option }}</strong>. {{ ai_explanation }}
+        <div class="mt-4 max-w-4xl">
+          <div class="relative rounded-2xl bg-white/95 p-6 pr-28 text-slate-900 shadow-xl">
+            <div class="absolute -left-3 top-5 h-0 w-0 border-b-8 border-l-8 border-t-8 border-b-transparent border-t-transparent border-l-white/95"></div>
+            <p class="text-xl leading-relaxed md:text-2xl font-semibold" id="ai-text-content">
+              The answer is <strong class="font-extrabold">{{ ai_suggested_option }}</strong>.
+              <span class="block mt-2 text-lg md:text-xl font-normal">{{ ai_explanation }}</span>
             </p>
 
             {% if is_intervention %}
@@ -111,7 +112,7 @@
                 ></div>
               </div>
               <div class="min-w-[120px] text-sm font-semibold text-slate-800 text-right">
-                {{ ai_confidence }}% confidence
+                AI is {{ ai_confidence }}% confident
               </div>
             </div>
             {% else %}
