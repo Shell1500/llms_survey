@@ -10,24 +10,42 @@
       Decision Making Pilot Study
     </h1>
     <p class="mt-2 text-base text-slate-600">
-      This short survey measures how participants rely on automation under time pressure.
-      Please provide your Student ID to begin.
+      This short survey involves answering 5 short reasoning questions under time pressure. Each question has a limited time to respond. The survey takes exactly 2.5 minutes. The timer will start as soon as you proceed.
     </p>
-    <form method="post" action="/start" class="mt-8 space-y-6">
+    <form method="post" action="/start" class="mt-8 space-y-4" id="start-form">
       <div>
         <label
           for="student_id"
           class="block text-sm font-medium text-slate-700"
-          >Enter Student ID</label
+          >Student ID (If LUMS student)</label
         >
         <input
           id="student_id"
           name="student_id"
-          required
           maxlength="64"
           class="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-base text-slate-900 shadow-inner focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-100"
+          placeholder="27XXXXXX"
         />
       </div>
+
+      <div>
+        <label
+          for="email"
+          class="block text-sm font-medium text-slate-700"
+          >Email (If not a LUMS student)</label
+        >
+        <input
+          id="email"
+          name="email"
+          type="email"
+          maxlength="128"
+          class="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-base text-slate-900 shadow-inner focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-100"
+          placeholder="name@example.com"
+        />
+      </div>
+
+      <!-- <p class="text-xs text-slate-500">Provide Student ID or Email to continue.</p> -->
+
       <button
         type="submit"
         class="inline-flex w-full items-center justify-center rounded-2xl bg-slate-900 px-6 py-3 text-lg font-semibold text-white transition hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-300"
@@ -40,6 +58,52 @@
     </p>
   </div>
 </section>
+
+<script>
+  // Client-side guard: require at least one of student_id or email
+  const startForm = document.getElementById('start-form');
+  const studentInput = document.getElementById('student_id');
+  const emailInput = document.getElementById('email');
+
+  if (startForm) {
+    startForm.addEventListener('submit', async (e) => {
+      const studentVal = (studentInput?.value || '').trim();
+      const emailVal = (emailInput?.value || '').trim();
+
+      if (!studentVal && !emailVal) {
+        e.preventDefault();
+        alert('Please provide either a Student ID or an Email to continue.');
+        return;
+      }
+
+      // Check prior submission and allow user to confirm continuing
+      try {
+        e.preventDefault();
+        const formData = new FormData();
+        formData.append('student_id', studentVal);
+        formData.append('email', emailVal);
+
+        const resp = await fetch('/check-submission', {
+          method: 'POST',
+          body: formData,
+        });
+        const data = await resp.json();
+
+        if (data.already_submitted) {
+          const proceed = confirm('Our records show you have already submitted. Do you want to continue?');
+          if (!proceed) {
+            return;
+          }
+        }
+
+        startForm.submit();
+      } catch (err) {
+        // On any error, fall back to normal submission
+        startForm.submit();
+      }
+    });
+  }
+</script>
 {% endblock %}
 
 

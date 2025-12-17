@@ -8,7 +8,7 @@ from uuid import uuid4
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, Form, HTTPException, Request
-from fastapi.responses import RedirectResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from motor.motor_asyncio import AsyncIOMotorClient
 from starlette.status import HTTP_303_SEE_OTHER
@@ -71,26 +71,58 @@ class SessionManager:
         self.questions_bank = [dict(q) for q in questions_bank]
         self.settings = settings
         self.sessions: Dict[str, Dict] = {}
-        self._next_group = "CONTROL"
+        # Balanced randomized assignment: shuffle 10 CONTROL + 10 INTERVENTION in each block of 20
+        self._group_pool: List[str] = []
 
-    def create_session(self, student_id: str) -> str:
+    def _next_group(self) -> str:
+        # Refill pool when empty
+        if not self._group_pool:
+            self._group_pool = ["CONTROL"] * 10 + ["INTERVENTION"] * 10
+            random.shuffle(self._group_pool)
+        return self._group_pool.pop()
+
+    def create_session(self, student_id: Optional[str], email: Optional[str]) -> str:
         if not self.questions_bank:
             raise RuntimeError("No questions available.")
 
         session_id = str(uuid4())
-        group = self._next_group
-        self._next_group = "INTERVENTION" if self._next_group == "CONTROL" else "CONTROL"
+        group = self._next_group()
         questions = [dict(q) for q in self.questions_bank]
-        random.shuffle(questions)
+
+        # Separate by difficulty for controlled ordering
+        easy_questions = [q for q in questions if (q.get("easy_or_hard", "").lower() == "easy")]
+        hard_questions = [q for q in questions if (q.get("easy_or_hard", "").lower() == "hard")]
+
+        random.shuffle(easy_questions)
+        random.shuffle(hard_questions)
+
+        desired_pattern = ["easy", "hard", "easy", "hard", "hard"]
+        ordered: List[Dict[str, str]] = []
+
+        for slot in desired_pattern:
+            if slot == "easy":
+                if not easy_questions:
+                    raise RuntimeError("Not enough EASY questions to satisfy ordering pattern.")
+                ordered.append(easy_questions.pop())
+            else:
+                if not hard_questions:
+                    raise RuntimeError("Not enough HARD questions to satisfy ordering pattern.")
+                ordered.append(hard_questions.pop())
+
+        # Append any remaining questions in random order
+        remaining = easy_questions + hard_questions
+        random.shuffle(remaining)
+        ordered.extend(remaining)
 
         limit = self.settings.num_questions
         if limit > 0:
-            questions = questions[: min(limit, len(questions))]
+            ordered = ordered[: min(limit, len(ordered))]
 
         self.sessions[session_id] = {
             "student_id": student_id,
+            "email": email,
             "group": group,
-            "questions": questions,
+            "questions": ordered,
             "created_at": datetime.utcnow(),
         }
         return session_id
@@ -112,17 +144,22 @@ class SessionManager:
         if question_number < 1 or question_number > len(questions):
             raise IndexError("Question number out of range.")
 
-        question = dict(questions[question_number - 1])
-        question["options"] = [
-            question.get("option_1", ""),
-            question.get("option_2", ""),
-            question.get("option_3", ""),
-            question.get("option_4", ""),
-        ]
+        question = questions[question_number - 1]
 
-        suggested_option = question.get("ai_suggested_option", "").strip()
-        ai_explanation = question.get("ai_explanation", "").strip()
-        confidence_raw = question.get("ai_confidence", "0")
+        # Normalize options into a list for the template
+        options = [
+            question.get("option_1"),
+            question.get("option_2"),
+            question.get("option_3"),
+            question.get("option_4"),
+        ]
+        # Filter out empty/None while preserving order
+        question["options"] = [opt for opt in options if opt]
+
+        suggested_option = (question.get("ai_suggested_option") or "").strip() or None
+        ai_explanation = (question.get("ai_explanation") or "").strip()
+
+        confidence_raw = question.get("ai_confidence", None)
         try:
             ai_confidence = max(0, min(100, int(float(confidence_raw))))
         except (TypeError, ValueError):
@@ -169,16 +206,40 @@ async def landing(request: Request):
 
 
 @app.post("/start")
-async def start_survey(request: Request, student_id: str = Form(...)):
-    clean_student = student_id.strip()
-    if not clean_student:
-        raise HTTPException(status_code=400, detail="Student ID is required.")
+async def start_survey(request: Request, student_id: Optional[str] = Form(None), email: Optional[str] = Form(None)):
+    clean_student = (student_id or "").strip() or None
+    clean_email = (email or "").strip() or None
 
-    session_id = session_manager.create_session(clean_student)
+    if not clean_student and not clean_email:
+        raise HTTPException(status_code=400, detail="Provide a Student ID or an Email to continue.")
+
+    session_id = session_manager.create_session(clean_student, clean_email)
     return RedirectResponse(
         url=f"/question/1?session_id={session_id}",
         status_code=HTTP_303_SEE_OTHER,
     )
+
+
+@app.post("/check-submission")
+async def check_submission(student_id: Optional[str] = Form(None), email: Optional[str] = Form(None)):
+    clean_student = (student_id or "").strip()
+    clean_email = (email or "").strip()
+
+    if not clean_student and not clean_email:
+        return JSONResponse({"already_submitted": False})
+
+    query = {"$or": []}
+    if clean_student:
+        query["$or"].append({"student_id": clean_student})
+    if clean_email:
+        query["$or"].append({"email": clean_email})
+
+    already = False
+    if query["$or"]:
+        existing = await responses_collection.find_one(query)
+        already = existing is not None
+
+    return JSONResponse({"already_submitted": already})
 
 
 @app.get("/question/{question_number}")
@@ -263,7 +324,8 @@ async def submit_question(
     ai_was_correct = (ai_suggested_option.strip() == ground_truth) if ai_suggested_option and ground_truth else None
 
     record = {
-        "student_id": session["student_id"],
+        "student_id": session.get("student_id"),
+        "email": session.get("email"),
         "session_id": session_id,
         "group": session["group"],
         "question_id": question_id,
