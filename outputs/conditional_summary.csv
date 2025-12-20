@@ -1,0 +1,3 @@
+group,n_ai_wrong,follow_when_ai_wrong,acc_when_ai_wrong,n_ai_correct,follow_when_ai_correct,acc_when_ai_correct
+CONTROL,195,0.48717948717948717,0.2564102564102564,130,0.7307692307692307,0.7307692307692307
+INTERVENTION,192,0.4114583333333333,0.296875,128,0.78125,0.78125
